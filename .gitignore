@@ -32,5 +32,7 @@ ehthumbs.db
 .tmp/
 dist/
 build/
+TekServeLocal-Windows.zip
+TekServeLocal-Linux.tar.gz
 *.spec.bak
 node_modules/

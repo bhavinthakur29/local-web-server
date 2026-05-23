@@ -1,5 +1,5 @@
-# PyInstaller spec for TekServe Local (Windows desktop build).
-# Build: pyinstaller tekserve_local.spec --noconfirm
+# PyInstaller spec for TekServe Local (Windows and Linux desktop builds).
+# Windows: .\build.ps1   Linux: ./build.sh
 #
 # AV / SmartScreen notes:
 # - onedir (default here) is less likely to trigger heuristics than onefile

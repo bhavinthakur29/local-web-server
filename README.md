@@ -2,6 +2,21 @@
 
 TekServe Local is a small desktop utility for sharing a local folder over HTTP with a built-in GUI. It combines a modern CustomTkinter control panel with a threaded Python web server so you can choose a directory, set a port, add a required passcode, and start or stop the server without working directly from the command line.
 
+<p align="center">
+  <a href="https://github.com/bhavinthakur29/local-web-server/releases/latest/download/TekServeLocal-Windows.zip">
+    <img src="https://img.shields.io/badge/Download-Windows-4f8ef7?style=for-the-badge&logo=windows&logoColor=white" alt="Download TekServe Local for Windows">
+  </a>
+  &nbsp;
+  <a href="https://github.com/bhavinthakur29/local-web-server/releases/latest/download/TekServeLocal-Linux.tar.gz">
+    <img src="https://img.shields.io/badge/Download-Linux-22c55e?style=for-the-badge&logo=linux&logoColor=white" alt="Download TekServe Local for Linux">
+  </a>
+</p>
+
+<p align="center">
+  <sub><b>Windows:</b> extract ZIP, run <code>TekServeLocal\TekServeLocal.exe</code> &nbsp;·&nbsp;
+  <b>Linux:</b> <code>tar -xzf TekServeLocal-Linux.tar.gz && ./TekServeLocal/TekServeLocal</code></sub>
+</p>
+
 The project is aimed at users who need a quick way to host files on a local network, preview a folder from another device, or expose simple static content during development. It is especially useful on Windows, where the launcher can automatically install missing Python dependencies and then open the main control app.
 
 ## Key Features
@@ -43,8 +58,8 @@ The project is aimed at users who need a quick way to host files on a local netw
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd web-server
+git clone https://github.com/bhavinthakur29/local-web-server.git
+cd local-web-server
 ```
 
 ### 2. Create and activate a virtual environment
@@ -116,16 +131,64 @@ The application currently uses a small local configuration file rather than envi
 - The app will reject ports outside `1024-65535`.
 - The server only serves the directory selected in the GUI.
 
-## Building the Windows app
+## Publish a downloadable release
 
-TekServe Local can be packaged as a normal desktop app (no Python install required on the target PC).
+The README download buttons point to the latest GitHub Release assets:
 
-### Build steps
+- `TekServeLocal-Windows.zip`
+- `TekServeLocal-Linux.tar.gz`
+
+Publish both by pushing a version tag (GitHub Actions builds on Windows and Linux):
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Or build locally and upload on the repository **Releases** page.
+
+## Building the desktop app
+
+TekServe Local can be packaged with PyInstaller as a folder app (no Python install required on the target machine). **Ship the whole `dist/TekServeLocal` folder**, not only the main binary.
+
+### Linux
+
+**Prerequisites** (tkinter is required for the GUI):
+
+```bash
+# Debian / Ubuntu
+sudo apt install python3 python3-pip python3-tk python3-dev
+
+# Fedora
+sudo dnf install python3 python3-pip python3-tkinter
+
+# Arch
+sudo pacman -S python python-pip tk
+```
+
+**Build:**
+
+```bash
+chmod +x build.sh package-release.sh
+./build.sh
+./package-release.sh   # optional: TekServeLocal-Linux.tar.gz for GitHub Releases
+```
+
+**Run:**
+
+```bash
+./dist/TekServeLocal/TekServeLocal
+```
+
+If the binary is not executable after extracting a release archive: `chmod +x TekServeLocal/TekServeLocal`.
+
+### Windows
 
 From the project folder in PowerShell:
 
 ```powershell
 .\build.ps1
+.\package-release.ps1   # optional: TekServeLocal-Windows.zip
 ```
 
 Output:
@@ -133,8 +196,6 @@ Output:
 ```text
 dist\TekServeLocal\TekServeLocal.exe
 ```
-
-**Ship the whole `dist\TekServeLocal` folder**, not only the `.exe`. The app needs the DLLs and libraries next to the executable.
 
 ### Reducing false virus / SmartScreen warnings
 
@@ -169,6 +230,8 @@ server_core.py     # Threaded protected static file server
 app_bundle.py      # Frozen-app paths and subprocess helpers
 tekserve_local.spec# PyInstaller build definition
 build.ps1          # Windows build script
+build.sh           # Linux build script
+package-release.sh # Linux release archive
 requirements.txt   # Python dependency list
 tekserve_local_config.json# Persisted folder selection
 ```
