@@ -34,5 +34,6 @@ dist/
 build/
 TekServeLocal-Windows.zip
 TekServeLocal-Linux.tar.gz
+TekServeLocal-Mac.zip
 *.spec.bak
 node_modules/

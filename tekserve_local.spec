@@ -1,5 +1,5 @@
-# PyInstaller spec for TekServe Local (Windows and Linux desktop builds).
-# Windows: .\build.ps1   Linux: ./build.sh
+# PyInstaller spec for TekServe Local (Windows, Linux, and macOS).
+# Windows: .\build.ps1   Linux: ./build.sh   macOS: ./build-mac.sh
 #
 # AV / SmartScreen notes:
 # - onedir (default here) is less likely to trigger heuristics than onefile
@@ -84,3 +84,19 @@ coll = COLLECT(
     upx_exclude=[],
     name="TekServeLocal",
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="TekServeLocal.app",
+        icon=None,
+        bundle_identifier="tech.teksquad.tekserve.local",
+        info_plist={
+            "CFBundleName": "TekServe Local",
+            "CFBundleDisplayName": "TekServe Local",
+            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleVersion": "1.0.0",
+            "NSHighResolutionCapable": True,
+            "LSMinimumSystemVersion": "11.0",
+        },
+    )

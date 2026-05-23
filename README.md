@@ -7,17 +7,30 @@ TekServe Local is a small desktop utility for sharing a local folder over HTTP w
     <img src="https://img.shields.io/badge/Download-Windows-4f8ef7?style=for-the-badge&logo=windows&logoColor=white" alt="Download TekServe Local for Windows">
   </a>
   &nbsp;
+  <a href="https://github.com/bhavinthakur29/local-web-server/releases/latest/download/TekServeLocal-Mac.zip">
+    <img src="https://img.shields.io/badge/Download-macOS-555555?style=for-the-badge&logo=apple&logoColor=white" alt="Download TekServe Local for macOS">
+  </a>
+  &nbsp;
   <a href="https://github.com/bhavinthakur29/local-web-server/releases/latest/download/TekServeLocal-Linux.tar.gz">
     <img src="https://img.shields.io/badge/Download-Linux-22c55e?style=for-the-badge&logo=linux&logoColor=white" alt="Download TekServe Local for Linux">
   </a>
 </p>
 
 <p align="center">
-  <sub><b>Windows:</b> extract ZIP, run <code>TekServeLocal\TekServeLocal.exe</code> &nbsp;·&nbsp;
-  <b>Linux:</b> <code>tar -xzf TekServeLocal-Linux.tar.gz && ./TekServeLocal/TekServeLocal</code></sub>
+  <sub>No coding or terminal required. Pick a folder, set a passcode, start the server, open the URL on any device on your Wi‑Fi.</sub>
 </p>
 
-The project is aimed at users who need a quick way to host files on a local network, preview a folder from another device, or expose simple static content during development. It is especially useful on Windows, where the launcher can automatically install missing Python dependencies and then open the main control app.
+### How to install (end users)
+
+| Platform | Steps |
+|----------|--------|
+| **Windows** | Download ZIP → extract → double‑click `TekServeLocal\TekServeLocal.exe` |
+| **macOS** | Download ZIP → double‑click to unzip → drag **TekServe Local** into **Applications** → open from Launchpad. First launch: **right‑click the app → Open** (unsigned app; no App Store needed). |
+| **Linux** | Download `.tar.gz` → extract → double‑click `TekServeLocal` (or run once: right‑click → Allow executing) |
+
+Then: choose folder → enter passcode → **Start Server** → **Copy** or **Open** the URL on your phone or another computer on the same network.
+
+The project is aimed at users who need a quick way to host files on a local network, preview a folder from another device, or expose simple static content during development—without installing Python or using the command line.
 
 ## Key Features
 
@@ -133,19 +146,37 @@ The application currently uses a small local configuration file rather than envi
 
 ## Publish a downloadable release
 
-The README download buttons point to the latest GitHub Release assets:
+> **Download links show “Not Found”?**  
+> There is no [GitHub Release](https://github.com/bhavinthakur29/local-web-server/releases) yet. The README buttons only work **after** you publish one (steps below). Wait for the [Actions](https://github.com/bhavinthakur29/local-web-server/actions) workflow to finish (about 10–15 minutes).
+
+The README download buttons point to these assets on the **latest** release:
 
 - `TekServeLocal-Windows.zip`
+- `TekServeLocal-Mac.zip`
 - `TekServeLocal-Linux.tar.gz`
 
-Publish both by pushing a version tag (GitHub Actions builds on Windows and Linux):
+### First release (one time)
+
+1. Commit and push your code to `main` (including `.github/workflows/release.yml`).
+2. Create and push a version tag:
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Or build locally and upload on the repository **Releases** page.
+On Windows you can run `.\publish-release.ps1` instead (same steps).
+
+3. Open **Actions** on GitHub and wait until **Release builds** completes for tag `v1.0.0`.
+4. Open **Releases** — you should see `v1.0.0` with all three download files. The README buttons will work.
+
+### Later releases
+
+Bump the tag (`v1.0.1`, `v1.1.0`, …) and push again. GitHub replaces **latest** with the newest release.
+
+### Manual upload (if CI fails)
+
+Build locally (`build.ps1`, `build-mac.sh`, `build.sh` + package scripts), then on GitHub: **Releases → Draft a new release →** upload the ZIP/tar.gz files with the exact names above.
 
 ## Building the desktop app
 
@@ -181,6 +212,28 @@ chmod +x build.sh package-release.sh
 ```
 
 If the binary is not executable after extracting a release archive: `chmod +x TekServeLocal/TekServeLocal`.
+
+### macOS
+
+**Prerequisites** (only for building from source):
+
+```bash
+brew install python-tk@3.13
+```
+
+**Build** (on a Mac):
+
+```bash
+chmod +x build-mac.sh package-release-mac.sh
+./build-mac.sh
+./package-release-mac.sh   # TekServeLocal-Mac.zip for GitHub Releases
+```
+
+**Output:** `dist/TekServeLocal.app` — a normal Mac app (not App Store). End users double‑click it; settings are stored in `~/Library/Application Support/TekServe Local/`.
+
+**First launch (unsigned app):** macOS may block the app. Use **right‑click → Open**, then confirm. Allow incoming connections if macOS Firewall prompts you when starting the server.
+
+**LAN access:** Other devices use the URL shown in the app (your Mac’s local IP, e.g. `http://192.168.1.10:12000/?passcode=...`). Phone and PC must be on the same Wi‑Fi.
 
 ### Windows
 
@@ -231,7 +284,9 @@ app_bundle.py      # Frozen-app paths and subprocess helpers
 tekserve_local.spec# PyInstaller build definition
 build.ps1          # Windows build script
 build.sh           # Linux build script
+build-mac.sh       # macOS build script (.app)
 package-release.sh # Linux release archive
+package-release-mac.sh # macOS release ZIP
 requirements.txt   # Python dependency list
 tekserve_local_config.json# Persisted folder selection
 ```

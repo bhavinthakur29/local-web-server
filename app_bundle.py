@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 SERVER_FLAG = "--server-core"
+_APP_SUPPORT_NAME = "TekServe Local"
 
 
 def is_frozen():
@@ -16,12 +17,24 @@ def app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def config_dir():
+    """Writable folder for settings (macOS .app bundles are read-only inside)."""
+    if is_frozen() and sys.platform == "darwin":
+        base = os.path.join(
+            os.path.expanduser("~/Library/Application Support"),
+            _APP_SUPPORT_NAME,
+        )
+        os.makedirs(base, exist_ok=True)
+        return base
+    return app_dir()
+
+
 def set_working_directory():
     os.chdir(app_dir())
 
 
 def config_path(filename):
-    return os.path.join(app_dir(), filename)
+    return os.path.join(config_dir(), filename)
 
 
 def server_launch_argv(port, directory, passcode):
