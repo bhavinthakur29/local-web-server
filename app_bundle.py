@@ -45,6 +45,12 @@ def server_launch_argv(port, directory, passcode):
     return [sys.executable, script, port_s, directory, passcode]
 
 
+def server_subprocess_env(passcode):
+    env = os.environ.copy()
+    env["TEKSERVE_PASSCODE"] = passcode
+    return env
+
+
 def _hidden_startupinfo():
     info = subprocess.STARTUPINFO()
     info.dwFlags |= subprocess.STARTF_USESHOWWINDOW

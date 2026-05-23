@@ -99,7 +99,11 @@ class ProtectedHandler(http.server.SimpleHTTPRequestHandler):
             body = _LOGIN_PAGE.encode("utf-8")
             content_type = "text/html; charset=utf-8"
         else:
-            body = b"Access Denied: Invalid Passcode"
+            body = (
+                b"Access Denied: Invalid Passcode\n\n"
+                b"Use the exact passcode from TekServe Local (Copy URL in the app).\n"
+                b"If you changed the passcode, stop and start the server again."
+            )
             content_type = "text/plain"
         self.send_response(403)
         self.send_header("Content-Type", content_type)
@@ -275,13 +279,33 @@ def _fmt_size(n):
     return f"{n:.1f} TB"
 
 
+_HTTPD = None
+
+
 def run_server(port, directory, passcode=""):
-    global PASSCODE_HASH
+    global PASSCODE_HASH, _HTTPD
     PASSCODE_HASH = hashlib.sha256(passcode.encode()).hexdigest() if passcode else None
     os.chdir(directory)
-    with ThreadedTCPServer(("", port), ProtectedHandler) as httpd:
-        print(f"RUNNING:{port}", flush=True)
-        httpd.serve_forever()
+    _HTTPD = ThreadedTCPServer(("", port), ProtectedHandler)
+    print(f"RUNNING:{port}", flush=True)
+    try:
+        _HTTPD.serve_forever()
+    finally:
+        _HTTPD.server_close()
+        _HTTPD = None
+
+
+def stop_server():
+    global _HTTPD
+    if _HTTPD is not None:
+        _HTTPD.shutdown()
+
+
+def _resolve_passcode(argv):
+    env_pass = os.environ.get("TEKSERVE_PASSCODE")
+    if env_pass is not None and env_pass != "":
+        return env_pass
+    return argv[2] if len(argv) > 2 else ""
 
 
 def main(argv=None):
@@ -291,7 +315,7 @@ def main(argv=None):
             raise ValueError("usage: server_core <port> <directory> [passcode]")
         port = int(argv[0])
         directory = argv[1]
-        passcode = argv[2] if len(argv) > 2 else ""
+        passcode = _resolve_passcode(argv)
         run_server(port, directory, passcode)
     except Exception as e:
         print(f"ERROR:{e}", flush=True)

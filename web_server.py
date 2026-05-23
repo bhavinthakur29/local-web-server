@@ -11,7 +11,13 @@ import requests
 import time
 import urllib.parse
 
-from app_bundle import config_path, server_launch_argv, server_subprocess_kwargs
+from app_bundle import (
+    config_path,
+    is_frozen,
+    server_launch_argv,
+    server_subprocess_env,
+    server_subprocess_kwargs,
+)
 
 CONFIG_FILE = config_path("tekserve_local_config.json")
 LEGACY_CONFIG_FILE = config_path("".join(("pho", "tron_config.json")))
@@ -92,6 +98,7 @@ class WebServer(ctk.CTk):
         self.configure(fg_color=DARK["bg"])
 
         self.server_process = None
+        self._server_thread = None
         self._server_port = None
         self._poll_job = None
         self._last_request_count = 0
@@ -317,19 +324,56 @@ class WebServer(ctk.CTk):
             return
 
         self._server_port = int(port_str)
+
+        if is_frozen():
+            import server_core
+
+            self._server_thread = threading.Thread(
+                target=server_core.run_server,
+                args=(self._server_port, path, passcode),
+                daemon=True,
+            )
+            self._server_thread.start()
+            threading.Thread(
+                target=self._wait_for_port,
+                args=(port_str, passcode),
+                daemon=True,
+            ).start()
+            return
+
         self.server_process = subprocess.Popen(
             server_launch_argv(port_str, path, passcode),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            env=server_subprocess_env(passcode),
             **server_subprocess_kwargs(),
         )
 
-        # Wait for ready signal in background thread
-        threading.Thread(target=self._wait_for_ready,
-                         args=(port_str, passcode), daemon=True).start()
+        threading.Thread(
+            target=self._wait_for_ready,
+            args=(port_str, passcode),
+            daemon=True,
+        ).start()
+
+    def _wait_for_port(self, port_str, passcode):
+        """Poll until the in-process server accepts connections."""
+        port = int(port_str)
+        for _ in range(60):
+            if self._server_thread is None:
+                return
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                    pass
+                self.after(0, self._on_server_ready, port_str, passcode)
+                return
+            except OSError:
+                time.sleep(0.15)
+        self.after(0, self._flash_error, "Server failed to start")
 
     def _wait_for_ready(self, port_str, passcode):
         """Read server stdout until RUNNING: is received."""
+        if self.server_process is None or self.server_process.stdout is None:
+            return
         for line in self.server_process.stdout:
             text = line.decode().strip()
             if text.startswith("RUNNING:"):
@@ -355,12 +399,34 @@ class WebServer(ctk.CTk):
         self._set_status(True)
         self._schedule_poll()
 
+    def _kill_server_subprocess(self, proc):
+        if proc is None:
+            return
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        else:
+            proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+
     def _stop_server(self):
         if self._poll_job:
             self.after_cancel(self._poll_job)
             self._poll_job = None
+        if self._server_thread is not None:
+            import server_core
+
+            server_core.stop_server()
+            self._server_thread = None
         if self.server_process:
-            self.server_process.terminate()
+            self._kill_server_subprocess(self.server_process)
             self.server_process = None
 
         self.btn_toggle.configure(text="Start Server",
@@ -376,7 +442,7 @@ class WebServer(ctk.CTk):
         self._poll_job = self.after(POLL_INTERVAL_MS, self._poll_status)
 
     def _poll_status(self):
-        if self.server_process is None:
+        if self.server_process is None and self._server_thread is None:
             return
         threading.Thread(target=self._fetch_status, daemon=True).start()
 
@@ -391,7 +457,7 @@ class WebServer(ctk.CTk):
         except Exception:
             pass
         finally:
-            if self.server_process:
+            if self.server_process or self._server_thread:
                 self.after(0, self._schedule_poll)
 
     def _apply_status(self, data):
