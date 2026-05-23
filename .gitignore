@@ -32,4 +32,5 @@ ehthumbs.db
 .tmp/
 dist/
 build/
+*.spec.bak
 node_modules/

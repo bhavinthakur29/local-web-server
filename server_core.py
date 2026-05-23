@@ -54,17 +54,25 @@ class ProtectedHandler(http.server.SimpleHTTPRequestHandler):
         cookies = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
         return cookies["auth_token"].value if "auth_token" in cookies else None
 
+    def _token_matches(self, token):
+        if not token or not PASSCODE_HASH:
+            return False
+        if token == PASSCODE_HASH:
+            return True
+        return hashlib.sha256(token.encode()).hexdigest() == PASSCODE_HASH
+
     def _is_authorized(self):
         if not PASSCODE_HASH:
             return True
-        token = self._get_cookie_token()
-        if token and hashlib.sha256(token.encode()).hexdigest() == PASSCODE_HASH:
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        raw = params.get("passcode", [""])[0].strip()
+        if raw and hashlib.sha256(raw.encode()).hexdigest() == PASSCODE_HASH:
+            self.auth_success_token = PASSCODE_HASH
             return True
-        if "passcode=" in self.path:
-            raw = self.path.split("passcode=", 1)[-1].split("&")[0]
-            if hashlib.sha256(raw.encode()).hexdigest() == PASSCODE_HASH:
-                self.auth_success_token = raw
-                return True
+        token = self._get_cookie_token()
+        if self._token_matches(token):
+            return True
         return False
 
     # ── Dispatch ──────────────────────────────────────────────────────
@@ -86,9 +94,15 @@ class ProtectedHandler(http.server.SimpleHTTPRequestHandler):
             self._send_403()
 
     def _send_403(self):
-        body = b"Access Denied: Invalid Passcode"
+        accept = self.headers.get("Accept", "")
+        if "text/html" in accept:
+            body = _LOGIN_PAGE.encode("utf-8")
+            content_type = "text/html; charset=utf-8"
+        else:
+            body = b"Access Denied: Invalid Passcode"
+            content_type = "text/plain"
         self.send_response(403)
-        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Connection", "close")
         self.end_headers()
@@ -199,10 +213,15 @@ class ProtectedHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         token = getattr(self, "auth_success_token", None)
         if token:
-            self.send_header(
-                "Set-Cookie",
-                f"auth_token={token}; Path=/; Max-Age=3600; HttpOnly; SameSite=Strict",
-            )
+            cookie = http.cookies.SimpleCookie()
+            cookie["auth_token"] = token
+            cookie["auth_token"]["path"] = "/"
+            cookie["auth_token"]["max-age"] = 3600
+            cookie["auth_token"]["httponly"] = True
+            cookie["auth_token"]["samesite"] = "Strict"
+            value = cookie.output(header="").strip()
+            if value:
+                self.send_header("Set-Cookie", value)
         if getattr(self, "auth_success", False):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
@@ -218,6 +237,36 @@ class ProtectedHandler(http.server.SimpleHTTPRequestHandler):
         }.get(ext, super().guess_type(path))
 
 
+_LOGIN_PAGE = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Access Required</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:#0f1117;color:#e2e8f0;min-height:100vh;display:flex;
+       align-items:center;justify-content:center;padding:24px}
+  .card{background:#1a1d27;border:1px solid #2a2d3a;border-radius:12px;
+        padding:28px;width:100%;max-width:360px}
+  h1{font-size:1.1rem;margin-bottom:8px}
+  p{color:#94a3b8;font-size:.9rem;margin-bottom:20px}
+  label{display:block;font-size:.75rem;color:#64748b;margin-bottom:6px}
+  input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid #2a2d3a;
+        background:#0f1117;color:#e2e8f0;font-size:1rem}
+  button{margin-top:16px;width:100%;padding:10px;border:none;border-radius:6px;
+         background:#4f8ef7;color:#fff;font-size:.95rem;font-weight:600;cursor:pointer}
+  button:hover{background:#3b7de8}
+</style></head>
+<body><div class="card">
+<h1>Access Required</h1>
+<p>Enter the passcode from TekServe Local to browse this folder.</p>
+<form method="GET" action="/">
+<label for="passcode">Passcode</label>
+<input id="passcode" name="passcode" type="password" autocomplete="current-password" required autofocus>
+<button type="submit">Continue</button>
+</form></div></body></html>"""
+
+
 def _fmt_size(n):
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024:
@@ -226,16 +275,28 @@ def _fmt_size(n):
     return f"{n:.1f} TB"
 
 
-if __name__ == "__main__":
+def run_server(port, directory, passcode=""):
+    global PASSCODE_HASH
+    PASSCODE_HASH = hashlib.sha256(passcode.encode()).hexdigest() if passcode else None
+    os.chdir(directory)
+    with ThreadedTCPServer(("", port), ProtectedHandler) as httpd:
+        print(f"RUNNING:{port}", flush=True)
+        httpd.serve_forever()
+
+
+def main(argv=None):
+    argv = list(argv) if argv is not None else sys.argv[1:]
     try:
-        port      = int(sys.argv[1])
-        directory = sys.argv[2]
-        passcode  = sys.argv[3] if len(sys.argv) > 3 else ""
-        PASSCODE_HASH = hashlib.sha256(passcode.encode()).hexdigest() if passcode else None
-        os.chdir(directory)
-        with ThreadedTCPServer(("", port), ProtectedHandler) as httpd:
-            print(f"RUNNING:{port}", flush=True)
-            httpd.serve_forever()
+        if len(argv) < 2:
+            raise ValueError("usage: server_core <port> <directory> [passcode]")
+        port = int(argv[0])
+        directory = argv[1]
+        passcode = argv[2] if len(argv) > 2 else ""
+        run_server(port, directory, passcode)
     except Exception as e:
         print(f"ERROR:{e}", flush=True)
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

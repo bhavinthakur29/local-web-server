@@ -1,12 +1,14 @@
+import importlib.util
 import subprocess
 import sys
-import importlib.util
-import os
+
+from app_bundle import SERVER_FLAG, is_frozen, set_working_directory
 
 REQUIRED = {
     "customtkinter": "customtkinter",
     "requests": "requests",
 }
+
 
 def check_dependencies():
     missing = []
@@ -33,15 +35,25 @@ def check_dependencies():
 
 
 def main():
-    here = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(here)
+    if len(sys.argv) > 1 and sys.argv[1] == SERVER_FLAG:
+        from server_core import main as run_server
 
-    if not check_dependencies():
+        run_server(sys.argv[2:])
+        return
+
+    set_working_directory()
+
+    if not is_frozen() and not check_dependencies():
         sys.exit(1)
 
-    result = subprocess.run([sys.executable, "web_server.py"])
-    sys.exit(result.returncode)
+    from web_server import WebServer
+
+    app = WebServer()
+    app.mainloop()
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     main()

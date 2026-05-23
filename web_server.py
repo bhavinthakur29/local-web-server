@@ -9,8 +9,12 @@ import webbrowser
 import socket
 import requests
 import time
+import urllib.parse
 
-CONFIG_FILE = "photron_config.json"
+from app_bundle import config_path, server_launch_argv, server_subprocess_kwargs
+
+CONFIG_FILE = config_path("tekserve_local_config.json")
+LEGACY_CONFIG_FILE = config_path("".join(("pho", "tron_config.json")))
 POLL_INTERVAL_MS = 2000
 
 ctk.set_appearance_mode("dark")
@@ -82,7 +86,7 @@ class LogPanel(ctk.CTkFrame):
 class WebServer(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Photron")
+        self.title("TekServe Local")
         self.geometry("520x640")
         self.resizable(False, False)
         self.configure(fg_color=DARK["bg"])
@@ -105,7 +109,7 @@ class WebServer(ctk.CTk):
         header.pack(fill="x")
         header.pack_propagate(False)
 
-        ctk.CTkLabel(header, text="⚡ Photron",
+        ctk.CTkLabel(header, text="⚡ TekServe Local",
                      font=("SF Pro Display", 18, "bold"),
                      text_color=DARK["text"]).pack(side="left", padx=20, pady=14)
 
@@ -156,18 +160,17 @@ class WebServer(ctk.CTk):
         self.entry_port.insert(0, "12000")
         self.entry_port.pack(side="left", padx=(4, 16))
 
-        pass_lbl = ctk.CTkLabel(net_row, text="Passcode", text_color=DARK["muted"],
+        pass_lbl = ctk.CTkLabel(net_row, text="Passcode *", text_color=DARK["muted"],
                                   font=("SF Pro Text", 12))
         pass_lbl.pack(side="left")
         self.entry_passcode = ctk.CTkEntry(net_row, height=36, corner_radius=6,
-                                            fg_color=DARK["surface"],
-                                            border_color=DARK["border"],
-                                            text_color=DARK["text"],
-                                            show="•")
+                            fg_color=DARK["surface"],
+                            border_color=DARK["border"],
+                            text_color=DARK["text"])
         self.entry_passcode.pack(side="left", fill="x", expand=True, padx=(4, 0))
 
         ctk.CTkLabel(body,
-                     text="Port range: 1024–65535  ·  Recommended: 49152+",
+                 text="Port range: 1024–65535  ·  Recommended: 49152+  ·  Passcode required",
                      font=("SF Pro Text", 11), text_color=DARK["muted"]).pack(anchor="w", pady=(0, 12))
 
         # URL output
@@ -244,12 +247,13 @@ class WebServer(ctk.CTk):
             s.close()
 
     def _load_config(self):
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, "r") as f:
-                    return json.load(f).get("path", os.getcwd())
-            except:
-                pass
+        for config_file in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, "r") as f:
+                        return json.load(f).get("path", os.getcwd())
+                except:
+                    pass
         return os.getcwd()
 
     def _save_config(self, path):
@@ -300,7 +304,7 @@ class WebServer(ctk.CTk):
     def _start_server(self):
         port_str = self.entry_port.get()
         path = self.entry_path.get()
-        passcode = self.entry_passcode.get()
+        passcode = self.entry_passcode.get().strip()
 
         if not port_str.isdigit() or not (1024 <= int(port_str) <= 65535):
             self._flash_error("Invalid port (1024–65535)")
@@ -308,13 +312,16 @@ class WebServer(ctk.CTk):
         if not os.path.isdir(path):
             self._flash_error("Invalid directory path")
             return
+        if not passcode.strip():
+            self._flash_error("Passcode required")
+            return
 
         self._server_port = int(port_str)
         self.server_process = subprocess.Popen(
-            [sys.executable, "server_core.py", port_str, path, passcode],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-            if sys.platform == "win32" else 0
+            server_launch_argv(port_str, path, passcode),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            **server_subprocess_kwargs(),
         )
 
         # Wait for ready signal in background thread
@@ -334,7 +341,8 @@ class WebServer(ctk.CTk):
 
     def _on_server_ready(self, port_str, passcode):
         ip = self._get_local_ip()
-        url = f"http://{ip}:{port_str}/" + (f"?passcode={passcode}" if passcode else "")
+        encoded_passcode = urllib.parse.quote(passcode, safe="")
+        url = f"http://{ip}:{port_str}/" + (f"?passcode={encoded_passcode}" if passcode else "")
 
         self.url_entry.configure(state="normal")
         self.url_entry.delete(0, "end")
