@@ -1,0 +1,35 @@
+# Always ignore sensitive credentials and environment files
+.env
+.env.local
+.env.*.local
+config/secrets.json
+*.pem
+
+# Logs and diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Common IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Temporary/Cache files
+.cache/
+.tmp/
+dist/
+build/
+node_modules/
